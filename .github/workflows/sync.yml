@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: The Forge Sync Authors
+# SPDX-License-Identifier: CC0-1.0
+#
+# Copy to .github/workflows/ in a protected launcher repository. Set the
+# repository variables FORGE_SYNC_VERSION and FORGE_SYNC_ARCHIVE_SHA256: a
+# hosted runner starts empty, so the job installs that exact release. A push
+# never starts this workflow.
+name: Sync
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Destination
+        type: choice
+        default: gitlab
+        options: [gitlab, github, all]
+      include:
+        description: Forge data to copy with Git
+        type: choice
+        default: git
+        options: [git, issues, pull_requests, issues_and_pull_requests, labels_and_milestones, releases, all]
+      mode:
+        description: Preview makes no remote writes
+        type: choice
+        default: preview
+        options: [preview, apply]
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install digest-pinned Forge Sync
+        env:
+          FORGE_SYNC_VERSION: ${{ vars.FORGE_SYNC_VERSION }}
+          FORGE_SYNC_ARCHIVE_SHA256: ${{ vars.FORGE_SYNC_ARCHIVE_SHA256 }}
+        run: |
+          set -euo pipefail
+          archive="forge-sync-${FORGE_SYNC_VERSION}-linux-x86_64.tar.gz"
+          stage=$(mktemp -d)
+          curl --fail --location --proto '=https' --silent --show-error --output "$stage/$archive" \
+            "https://codefloe.com/itiquette/forge-sync/releases/download/v${FORGE_SYNC_VERSION}/$archive"
+          printf '%s  %s\n' "$FORGE_SYNC_ARCHIVE_SHA256" "$stage/$archive" | sha256sum --check --strict -
+          tar -xzf "$stage/$archive" -C "$stage"
+          mkdir -p "$RUNNER_TEMP/bin"
+          install -m 0755 "$stage/${archive%.tar.gz}/forge-sync" "$RUNNER_TEMP/bin/forge-sync"
+          printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - run: >-
+          forge-sync --format plain --config-file ci/forgesync.yaml sync --group production/upstream --target "$SYNC_TARGET" --include "$SYNC_INCLUDE" --mode "$SYNC_MODE" --missing-target require --description on-create --target-settings leave
+        env:
+          SYNC_TARGET: ${{ inputs.target }}
+          SYNC_INCLUDE: ${{ inputs.include }}
+          SYNC_MODE: ${{ inputs.mode }}
+          FSYNC_FORGEJO_TOKEN: ${{ secrets.FSYNC_FORGEJO_TOKEN }}
+          # Each destination's token reaches the job only when it is selected.
+          FSYNC_GITLAB_TOKEN: ${{ inputs.target != 'github' && secrets.FSYNC_GITLAB_TOKEN || '' }}
+          FSYNC_GITHUB_TOKEN: ${{ inputs.target != 'gitlab' && secrets.FSYNC_GITHUB_TOKEN || '' }}

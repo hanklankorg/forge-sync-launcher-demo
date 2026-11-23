@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: The Forge Sync Authors
+# SPDX-License-Identifier: CC0-1.0
+#
+# Reviewed configuration for a manual-sync launcher repository. The CI forms
+# select from this file; they cannot add a URL, path, token or target to it.
+forgesync:
+  config:
+    extends:
+      - preset:provider-mirror
+      # Remove this preset only if a target below must allow force or prune.
+      - preset:no-history-rewrite
+  environments:
+    production:
+      upstream:
+        provider_type: forgejo
+        domain: forgejo.example.com
+        owner: your-org
+        owner_type: group
+        auth:
+          token: "${FSYNC_FORGEJO_TOKEN}"
+        repositories:
+          include:
+            - your-repository
+          include_private: true
+        mirrors:
+          gitlab:
+            provider_type: gitlab
+            domain: gitlab.example.com
+            owner: your-group
+            owner_type: group
+            auth:
+              token: "${FSYNC_GITLAB_TOKEN}"
+            settings:
+              disabled: false
+              visibility: private
+              # Force and prune stay refused until a reviewer enables them
+              # here, per target, and removes the preset above.
+              # manual:
+              #   allow_force_push: true
+              #   allow_prune: true
+              manual:
+                ref_sets:
+                  release:
+                    include: [main, release]
+          github:
+            provider_type: github
+            owner: your-org
+            owner_type: group
+            auth:
+              token: "${FSYNC_GITHUB_TOKEN}"
+            settings:
+              disabled: false
+              visibility: private
+              manual:
+                ref_sets:
+                  release:
+                    include: [main, release]
