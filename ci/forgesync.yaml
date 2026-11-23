@@ -22,8 +22,11 @@ forgesync:
           include:
             - your-repository
           include_private: true
+        # Each mirror name is what the form's Target list shows, so name the
+        # instance and the org or user. Several orgs or users on one instance
+        # are separate mirrors, each with its own token variable.
         mirrors:
-          gitlab:
+          gitlab.example.com/your-group:
             provider_type: gitlab
             domain: gitlab.example.com
             owner: your-group
@@ -42,7 +45,7 @@ forgesync:
                 ref_sets:
                   release:
                     include: [main, release]
-          github:
+          github.com/your-org:
             provider_type: github
             owner: your-org
             owner_type: group

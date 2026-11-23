@@ -12,18 +12,41 @@ on:
       target:
         description: Destination
         type: choice
-        default: gitlab
-        options: [gitlab, github, all]
-      include:
-        description: Forge data to copy with Git
-        type: choice
-        default: git
-        options: [git, issues, pull_requests, issues_and_pull_requests, labels_and_milestones, releases, all]
+        default: gitlab.example.com/your-group
+        options: [gitlab.example.com/your-group, github.com/your-org, all]
       mode:
         description: Preview makes no remote writes
         type: choice
         default: preview
         options: [preview, apply]
+      issues:
+        description: Issues
+        type: boolean
+        default: false
+      pull_requests:
+        description: Pull request records
+        type: boolean
+        default: false
+      labels:
+        description: Labels
+        type: boolean
+        default: false
+      milestones:
+        description: Milestones
+        type: boolean
+        default: false
+      releases:
+        description: Releases
+        type: boolean
+        default: false
+      wiki:
+        description: Wiki
+        type: boolean
+        default: false
+      lfs:
+        description: Git LFS objects
+        type: boolean
+        default: false
       missing_target:
         description: Missing target repository
         type: choice
@@ -49,16 +72,6 @@ on:
         type: choice
         default: config
         options: [config, default, 'set:release']
-      wiki:
-        description: Wiki
-        type: choice
-        default: config
-        options: [config, include, exclude]
-      lfs:
-        description: Git LFS
-        type: choice
-        default: config
-        options: [config, include, exclude]
       target_settings:
         description: Existing target settings
         type: choice
@@ -70,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - name: Install digest-pinned Forge Sync
@@ -88,20 +101,29 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           install -m 0755 "$stage/${archive%.tar.gz}/forge-sync" "$RUNNER_TEMP/bin/forge-sync"
           printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - run: >-
-          forge-sync --format plain --config-file ci/forgesync.yaml sync --group production/upstream --target "$SYNC_TARGET" --include "$SYNC_INCLUDE" --mode "$SYNC_MODE" --missing-target "$SYNC_MISSING_TARGET" --push "$SYNC_PUSH" --extra-refs "$SYNC_EXTRA_REFS" --description "$SYNC_DESCRIPTION" --refs "$SYNC_REFS" --wiki "$SYNC_WIKI" --lfs "$SYNC_LFS" --target-settings "$SYNC_TARGET_SETTINGS"
+      - run: |
+          include=git
+          for choice in "issues:$SYNC_ISSUES" "pull_requests:$SYNC_PULL_REQUESTS" "labels:$SYNC_LABELS" "milestones:$SYNC_MILESTONES" "releases:$SYNC_RELEASES" "wiki:$SYNC_WIKI" "lfs:$SYNC_LFS"; do
+            case "$choice" in *:true) include="$include,${choice%:*}" ;; esac
+          done
+          forge-sync --format plain --config-file ci/forgesync.yaml sync --group production/upstream --target "$SYNC_TARGET" --include "$include" --mode "$SYNC_MODE" --missing-target "$SYNC_MISSING_TARGET" --push "$SYNC_PUSH" --extra-refs "$SYNC_EXTRA_REFS" --description "$SYNC_DESCRIPTION" --refs "$SYNC_REFS" --target-settings "$SYNC_TARGET_SETTINGS"
         env:
           SYNC_TARGET: ${{ inputs.target }}
-          SYNC_INCLUDE: ${{ inputs.include }}
           SYNC_MODE: ${{ inputs.mode }}
+          SYNC_ISSUES: ${{ inputs.issues }}
+          SYNC_PULL_REQUESTS: ${{ inputs.pull_requests }}
+          SYNC_LABELS: ${{ inputs.labels }}
+          SYNC_MILESTONES: ${{ inputs.milestones }}
+          SYNC_RELEASES: ${{ inputs.releases }}
+          SYNC_WIKI: ${{ inputs.wiki }}
+          SYNC_LFS: ${{ inputs.lfs }}
           SYNC_MISSING_TARGET: ${{ inputs.missing_target }}
           SYNC_PUSH: ${{ inputs.push }}
           SYNC_EXTRA_REFS: ${{ inputs.extra_refs }}
           SYNC_DESCRIPTION: ${{ inputs.description_policy }}
           SYNC_REFS: ${{ inputs.refs }}
-          SYNC_WIKI: ${{ inputs.wiki }}
-          SYNC_LFS: ${{ inputs.lfs }}
           SYNC_TARGET_SETTINGS: ${{ inputs.target_settings }}
           FSYNC_FORGEJO_TOKEN: ${{ secrets.FSYNC_FORGEJO_TOKEN }}
-          FSYNC_GITLAB_TOKEN: ${{ inputs.target != 'github' && secrets.FSYNC_GITLAB_TOKEN || '' }}
-          FSYNC_GITHUB_TOKEN: ${{ inputs.target != 'gitlab' && secrets.FSYNC_GITHUB_TOKEN || '' }}
+          # Add one such line per mirror in ci/forgesync.yaml.
+          FSYNC_GITLAB_TOKEN: ${{ (inputs.target == 'gitlab.example.com/your-group' || inputs.target == 'all') && secrets.FSYNC_GITLAB_TOKEN || '' }}
+          FSYNC_GITHUB_TOKEN: ${{ (inputs.target == 'github.com/your-org' || inputs.target == 'all') && secrets.FSYNC_GITHUB_TOKEN || '' }}

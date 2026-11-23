@@ -4,7 +4,8 @@
 # Copy to .github/workflows/ in a protected launcher repository. Set the
 # repository variables FORGE_SYNC_VERSION and FORGE_SYNC_ARCHIVE_SHA256: a
 # hosted runner starts empty, so the job installs that exact release. A push
-# never starts this workflow.
+# never starts this workflow. Target options are the mirror names in
+# ci/forgesync.yaml.
 name: Sync
 on:
   workflow_dispatch:
@@ -12,25 +13,48 @@ on:
       target:
         description: Destination
         type: choice
-        default: gitlab
-        options: [gitlab, github, all]
-      include:
-        description: Forge data to copy with Git
-        type: choice
-        default: git
-        options: [git, issues, pull_requests, issues_and_pull_requests, labels_and_milestones, releases, all]
+        default: gitlab.example.com/your-group
+        options: [gitlab.example.com/your-group, github.com/your-org, all]
       mode:
         description: Preview makes no remote writes
         type: choice
         default: preview
         options: [preview, apply]
+      issues:
+        description: Issues
+        type: boolean
+        default: false
+      pull_requests:
+        description: Pull request records
+        type: boolean
+        default: false
+      labels:
+        description: Labels
+        type: boolean
+        default: false
+      milestones:
+        description: Milestones
+        type: boolean
+        default: false
+      releases:
+        description: Releases
+        type: boolean
+        default: false
+      wiki:
+        description: Wiki
+        type: boolean
+        default: false
+      lfs:
+        description: Git LFS objects
+        type: boolean
+        default: false
 jobs:
   sync:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - name: Install digest-pinned Forge Sync
@@ -48,13 +72,24 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           install -m 0755 "$stage/${archive%.tar.gz}/forge-sync" "$RUNNER_TEMP/bin/forge-sync"
           printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - run: >-
-          forge-sync --format plain --config-file ci/forgesync.yaml sync --group production/upstream --target "$SYNC_TARGET" --include "$SYNC_INCLUDE" --mode "$SYNC_MODE" --missing-target require --description on-create --target-settings leave
+      - run: |
+          include=git
+          for choice in "issues:$SYNC_ISSUES" "pull_requests:$SYNC_PULL_REQUESTS" "labels:$SYNC_LABELS" "milestones:$SYNC_MILESTONES" "releases:$SYNC_RELEASES" "wiki:$SYNC_WIKI" "lfs:$SYNC_LFS"; do
+            case "$choice" in *:true) include="$include,${choice%:*}" ;; esac
+          done
+          forge-sync --format plain --config-file ci/forgesync.yaml sync --group production/upstream --target "$SYNC_TARGET" --include "$include" --mode "$SYNC_MODE" --missing-target require --description on-create --target-settings leave
         env:
           SYNC_TARGET: ${{ inputs.target }}
-          SYNC_INCLUDE: ${{ inputs.include }}
           SYNC_MODE: ${{ inputs.mode }}
+          SYNC_ISSUES: ${{ inputs.issues }}
+          SYNC_PULL_REQUESTS: ${{ inputs.pull_requests }}
+          SYNC_LABELS: ${{ inputs.labels }}
+          SYNC_MILESTONES: ${{ inputs.milestones }}
+          SYNC_RELEASES: ${{ inputs.releases }}
+          SYNC_WIKI: ${{ inputs.wiki }}
+          SYNC_LFS: ${{ inputs.lfs }}
           FSYNC_FORGEJO_TOKEN: ${{ secrets.FSYNC_FORGEJO_TOKEN }}
           # Each destination's token reaches the job only when it is selected.
-          FSYNC_GITLAB_TOKEN: ${{ inputs.target != 'github' && secrets.FSYNC_GITLAB_TOKEN || '' }}
-          FSYNC_GITHUB_TOKEN: ${{ inputs.target != 'gitlab' && secrets.FSYNC_GITHUB_TOKEN || '' }}
+          # Add one such line per mirror in ci/forgesync.yaml.
+          FSYNC_GITLAB_TOKEN: ${{ (inputs.target == 'gitlab.example.com/your-group' || inputs.target == 'all') && secrets.FSYNC_GITLAB_TOKEN || '' }}
+          FSYNC_GITHUB_TOKEN: ${{ (inputs.target == 'github.com/your-org' || inputs.target == 'all') && secrets.FSYNC_GITHUB_TOKEN || '' }}
