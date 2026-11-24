@@ -130,6 +130,6 @@ jobs:
           SYNC_REFS: ${{ inputs.refs }}
           SYNC_TARGET_SETTINGS: ${{ inputs.target_settings }}
           FSYNC_FORGEJO_TOKEN: ${{ secrets.FSYNC_FORGEJO_TOKEN }}
-          # Add one such line per mirror in ci/forgesync.yaml.
+          # Add one such line per destination in ci/forgesync.yaml, with the same name.
           FSYNC_GITLAB_TOKEN: ${{ (inputs.target == 'gitlab.example.com/your-group' || inputs.target == 'all') && secrets.FSYNC_GITLAB_TOKEN || '' }}
           FSYNC_GITHUB_TOKEN: ${{ (inputs.target == 'github.com/your-org' || inputs.target == 'all') && secrets.FSYNC_GITHUB_TOKEN || '' }}
