@@ -4,50 +4,42 @@
 # Copy to .github/workflows/ in a protected launcher repository. Set the
 # repository variables FORGE_SYNC_VERSION and FORGE_SYNC_ARCHIVE_SHA256: a
 # hosted runner starts empty, so the job installs that exact release. A push
-# never starts this workflow. Target options are the mirror names in
-# ci/forgesync.yaml.
-name: Sync
+# never starts this workflow. Destination options are the
+# names under mirrors: in ci/forgesync.yaml.
+name: Mirror to another forge
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: Destination
+        description: "Destination (Git branches and tags are always copied; all = every destination)"
         type: choice
         default: gitlab.example.com/your-group
         options: [gitlab.example.com/your-group, github.com/your-org, all]
-      mode:
-        description: Preview makes no remote writes
-        type: choice
-        default: preview
-        options: [preview, apply]
       issues:
-        description: Issues
+        description: "Also copy issues (with their labels and milestones)"
         type: boolean
         default: false
       pull_requests:
-        description: Pull request records
-        type: boolean
-        default: false
-      labels:
-        description: Labels
-        type: boolean
-        default: false
-      milestones:
-        description: Milestones
+        description: "Also copy pull requests (as issues)"
         type: boolean
         default: false
       releases:
-        description: Releases
+        description: "Also copy releases"
         type: boolean
         default: false
       wiki:
-        description: Wiki
+        description: "Also copy the wiki"
         type: boolean
         default: false
       lfs:
-        description: Git LFS objects
+        description: "Also copy Git LFS files (large files)"
         type: boolean
         default: false
+      mode:
+        description: "Preview shows what would change, apply copies"
+        type: choice
+        default: preview
+        options: [preview, apply]
 jobs:
   sync:
     if: github.ref == 'refs/heads/main'
@@ -74,7 +66,7 @@ jobs:
           printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - run: |
           include=git
-          for choice in "issues:$SYNC_ISSUES" "pull_requests:$SYNC_PULL_REQUESTS" "labels:$SYNC_LABELS" "milestones:$SYNC_MILESTONES" "releases:$SYNC_RELEASES" "wiki:$SYNC_WIKI" "lfs:$SYNC_LFS"; do
+          for choice in "issues:$SYNC_ISSUES" "pull_requests:$SYNC_PULL_REQUESTS" "releases:$SYNC_RELEASES" "wiki:$SYNC_WIKI" "lfs:$SYNC_LFS"; do
             case "$choice" in *:true) include="$include,${choice%:*}" ;; esac
           done
           forge-sync --format plain --config-file ci/forgesync.yaml sync --group production/upstream --target "$SYNC_TARGET" --include "$include" --mode "$SYNC_MODE" --missing-target require --description on-create --target-settings leave
@@ -83,8 +75,6 @@ jobs:
           SYNC_MODE: ${{ inputs.mode }}
           SYNC_ISSUES: ${{ inputs.issues }}
           SYNC_PULL_REQUESTS: ${{ inputs.pull_requests }}
-          SYNC_LABELS: ${{ inputs.labels }}
-          SYNC_MILESTONES: ${{ inputs.milestones }}
           SYNC_RELEASES: ${{ inputs.releases }}
           SYNC_WIKI: ${{ inputs.wiki }}
           SYNC_LFS: ${{ inputs.lfs }}

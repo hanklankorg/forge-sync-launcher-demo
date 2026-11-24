@@ -22,7 +22,7 @@ forgesync:
           include:
             - your-repository
           include_private: true
-        # Each mirror name is what the form's Target list shows, so name the
+        # Each mirror name is what the form's Destination list shows, so name the
         # instance and the org or user. Several orgs or users on one instance
         # are separate mirrors, each with its own token variable.
         mirrors:

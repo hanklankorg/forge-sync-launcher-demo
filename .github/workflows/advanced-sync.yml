@@ -5,78 +5,82 @@
 # release. Force and prune are offered here, but Forge Sync refuses them unless
 # the target's reviewed configuration allows them. Protect this workflow's
 # branch: the form is not authorization.
-name: Advanced Sync
+name: Mirror to another forge (advanced)
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: Destination
+        description: "Destination (Git branches and tags are always copied; all = every destination)"
         type: choice
         default: gitlab.example.com/your-group
         options: [gitlab.example.com/your-group, github.com/your-org, all]
-      mode:
-        description: Preview makes no remote writes
-        type: choice
-        default: preview
-        options: [preview, apply]
       issues:
-        description: Issues
+        description: "Also copy issues (with their labels and milestones)"
         type: boolean
         default: false
       pull_requests:
-        description: Pull request records
+        description: "Also copy pull requests (as issues)"
         type: boolean
         default: false
       labels:
-        description: Labels
+        description: "Also copy labels (without issues)"
         type: boolean
         default: false
       milestones:
-        description: Milestones
+        description: "Also copy milestones (without issues)"
         type: boolean
         default: false
       releases:
-        description: Releases
+        description: "Also copy releases"
         type: boolean
         default: false
       wiki:
-        description: Wiki
+        description: "Also copy the wiki"
+        type: boolean
+        default: false
+      replace_starter_wiki:
+        description: "Replace GitHub's starter wiki page (first wiki copy only)"
         type: boolean
         default: false
       lfs:
-        description: Git LFS objects
+        description: "Also copy Git LFS files (large files)"
         type: boolean
         default: false
       missing_target:
-        description: Missing target repository
+        description: "If the destination repository is missing: require = stop, skip = leave it out, create-private = create it private"
         type: choice
         default: require
         options: [require, skip, create-private]
       push:
-        description: Push behavior
+        description: "If the destination has diverged: no-force = stop, allow-force = overwrite (the config must allow it)"
         type: choice
         default: no-force
         options: [no-force, allow-force]
       extra_refs:
-        description: Extra target branches and tags
+        description: "Branches and tags only the destination has: keep, or prune = delete them (the config must allow it)"
         type: choice
         default: keep
         options: [keep, prune]
       description_policy:
-        description: Target description
+        description: "Destination description: leave, copy = from the source, on-create = only for a new repository, configured = from the config"
         type: choice
         default: on-create
         options: [leave, copy, on-create, configured]
       refs:
-        description: Branches
+        description: "Branches to copy: config = as configured, default = the default branch only, set:release = the config's release set"
         type: choice
         default: config
         options: [config, default, 'set:release']
       target_settings:
-        description: Existing target settings
+        description: "Settings of an existing destination: leave, or apply = visibility, topics and features from the config"
         type: choice
         default: leave
         options: [leave, apply]
+      mode:
+        description: "Preview shows what would change, apply copies"
+        type: choice
+        default: preview
+        options: [preview, apply]
 jobs:
   sync:
     if: github.ref == 'refs/heads/main'
@@ -106,7 +110,8 @@ jobs:
           for choice in "issues:$SYNC_ISSUES" "pull_requests:$SYNC_PULL_REQUESTS" "labels:$SYNC_LABELS" "milestones:$SYNC_MILESTONES" "releases:$SYNC_RELEASES" "wiki:$SYNC_WIKI" "lfs:$SYNC_LFS"; do
             case "$choice" in *:true) include="$include,${choice%:*}" ;; esac
           done
-          forge-sync --format plain --config-file ci/forgesync.yaml sync --group production/upstream --target "$SYNC_TARGET" --include "$include" --mode "$SYNC_MODE" --missing-target "$SYNC_MISSING_TARGET" --push "$SYNC_PUSH" --extra-refs "$SYNC_EXTRA_REFS" --description "$SYNC_DESCRIPTION" --refs "$SYNC_REFS" --target-settings "$SYNC_TARGET_SETTINGS"
+          case "$SYNC_REPLACE_STARTER_WIKI" in true) set -- --replace-starter-wiki ;; esac
+          forge-sync --format plain --config-file ci/forgesync.yaml sync --group production/upstream --target "$SYNC_TARGET" --include "$include" --mode "$SYNC_MODE" --missing-target "$SYNC_MISSING_TARGET" --push "$SYNC_PUSH" --extra-refs "$SYNC_EXTRA_REFS" --description "$SYNC_DESCRIPTION" --refs "$SYNC_REFS" --target-settings "$SYNC_TARGET_SETTINGS" "$@"
         env:
           SYNC_TARGET: ${{ inputs.target }}
           SYNC_MODE: ${{ inputs.mode }}
@@ -117,6 +122,7 @@ jobs:
           SYNC_RELEASES: ${{ inputs.releases }}
           SYNC_WIKI: ${{ inputs.wiki }}
           SYNC_LFS: ${{ inputs.lfs }}
+          SYNC_REPLACE_STARTER_WIKI: ${{ inputs.replace_starter_wiki }}
           SYNC_MISSING_TARGET: ${{ inputs.missing_target }}
           SYNC_PUSH: ${{ inputs.push }}
           SYNC_EXTRA_REFS: ${{ inputs.extra_refs }}
